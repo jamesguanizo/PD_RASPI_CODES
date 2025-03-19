@@ -1,23 +1,20 @@
 from picamera2 import Picamera2
 import cv2
 import os
+import subprocess
 from datetime import datetime
+
+# Ensure the Pictures directory exists
+save_dir = "/home/tipqc/Pictures/DATASET/NONFRESH"
+os.makedirs(save_dir, exist_ok=True)
 
 # Initialize the camera
 picam2 = Picamera2()
 camera_config = picam2.create_still_configuration()
 picam2.configure(camera_config)
 
-# Enable HDR and Auto Focus
-picam2.set_controls({
-    "NoiseReductionMode": 3,  # Enable Noise Reduction (helps with HDR)
-    "DynamicRangeCompression": 2,  # Apply HDR effect
-    "AfMode": 2  # Auto Focus mode (Continuous mode)
-})
-
-# Ensure the Pictures directory exists
-save_dir = "/home/tipqc/Pictures/DATASET/NONFRESH"
-os.makedirs(save_dir, exist_ok=True)
+# Enable Auto Focus
+picam2.set_controls({"AfMode": 2})  # Continuous autofocus
 
 # Start the camera
 picam2.start_preview()
@@ -30,7 +27,7 @@ min_zoom = 1.0  # Minimum zoom (full frame)
 max_zoom = 3.0  # Maximum zoom (adjustable)
 sensor_w, sensor_h = picam2.sensor_resolution  # Get sensor resolution
 
-print("Press SPACEBAR to capture an image, ↑ to zoom in, ↓ to zoom out, ESC to exit.")
+print("Press SPACEBAR to capture an HDR image, ↑ to zoom in, ↓ to zoom out, ESC to exit.")
 
 def update_zoom():
     """Updates the camera's region of interest (ROI) for zooming."""
@@ -58,12 +55,16 @@ while True:
 
     # Wait for key press
     key = cv2.waitKey(1) & 0xFF
-    if key == 32:  # Spacebar pressed (Capture Image)
-        print("Focusing...")
-        picam2.set_controls({"AfTrigger": 1})  # Trigger Auto Focus
+    if key == 32:  # Spacebar pressed (Capture HDR Image)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(save_dir, f"captured_image_{timestamp}.jpg")
-        picam2.capture_file(filename)
+
+        print("Focusing...")
+        picam2.set_controls({"AfTrigger": 1})  # Trigger Auto Focus
+
+        print(f"Capturing HDR image: {filename}")
+        subprocess.run(["libcamera-still", "--hdr", "1", "-o", filename])
+
         print(f"Image saved as {filename}")
         photo_count += 1  # Increment photo count
 
