@@ -5,65 +5,62 @@ import subprocess
 from datetime import datetime
 import time
 
-# Ensure the dataset directory exists
 save_dir = "/home/tipqc/Pictures/DATASET/FRESH"
 os.makedirs(save_dir, exist_ok=True)
 
-# Initialize the camera
-picam2 = Picamera2()
-camera_config = picam2.create_still_configuration()
-picam2.configure(camera_config)
-picam2.start()
+def initialize_camera():
+    picam2 = Picamera2()
+    config = picam2.create_preview_configuration()
+    picam2.configure(config)
+    picam2.start()
+    return picam2
 
-print("Press SPACEBAR to capture an HDR image with autofocus, ESC to exit.")
-
-while True:
+def capture_hdr_image(filename):
     try:
-        # Capture a preview frame
+        subprocess.run([
+            "libcamera-still",
+            "--hdr",
+            "--autofocus-mode", "auto",
+            "-o", filename
+        ], check=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Error capturing HDR image: {e}")
+        return False
+
+picam2 = initialize_camera()
+print("Press SPACEBAR to capture, ESC to exit")
+
+try:
+    while True:
         frame = picam2.capture_array()
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        cv2.imshow("Camera Preview", frame)
+        cv2.imshow("Preview", frame)
 
         key = cv2.waitKey(1) & 0xFF
 
-        if key == 32:  # Spacebar (Capture HDR Image)
+        if key == 32:  # Spacebar
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = os.path.join(save_dir, f"captured_image_{timestamp}.jpg")
+            
+            # Clean up picamera2 resources
+            picam2.stop()
+            picam2.close()
+            
+            # Ensure camera release
+            time.sleep(1)
+            
+            # Capture with libcamera-still
+            if capture_hdr_image(filename):
+                print(f"Captured: {filename}")
+            
+            # Reinitialize camera
+            picam2 = initialize_camera()
 
-            print("Stopping picamera2 to free the camera...")
-            picam2.stop()  # Stop Picamera2 before using libcamera-still
-            time.sleep(2)  # Ensure the camera is fully released
-
-            print(f"Capturing HDR image: {filename}")
-            try:
-                subprocess.run([
-                    "libcamera-still",
-                    "--hdr",
-                    "--autofocus-mode", "auto",
-                    "-o", filename
-                ], check=True)
-                print(f"Image saved as {filename}")
-            except subprocess.CalledProcessError as e:
-                print(f"Error capturing HDR image: {e}")
-
-            print("Restarting picamera2...")
-            try:
-                picam2 = Picamera2()  # Reinitialize picamera2
-                camera_config = picam2.create_still_configuration()
-                picam2.configure(camera_config)
-                picam2.start()
-                print("Picamera2 restarted successfully.")
-            except Exception as e:
-                print(f"Failed to restart picamera2: {e}")
-                break  # Exit loop if camera fails to restart
-
-        elif key == 27:  # ESC key (Exit)
+        elif key == 27:  # ESC
             break
 
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        break  # Exit loop on unexpected errors
-
-# Clean up
-cv2.destroyAllWindows()
-picam2.stop()
+finally:
+    cv2.destroyAllWindows()
+    picam2.stop()
+    picam2.close()
