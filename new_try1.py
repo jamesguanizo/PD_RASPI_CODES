@@ -5,6 +5,7 @@ import os
 import time
 import threading
 import numpy as np
+import requests
 from inference_sdk import InferenceHTTPClient
 
 # Initialize Flask app
@@ -30,11 +31,15 @@ CLIENT = InferenceHTTPClient(
     api_key="Wk1p4Yv2hc8lK7Of48ME"
 )
 
+# Use a session to manage connections
+session = requests.Session()
+
 SAVE_FOLDER = "saved_images"
 os.makedirs(SAVE_FOLDER, exist_ok=True)
 
 # Global variable for inference results
 result_cache = None
+lock = threading.Lock()  # Prevents race conditions in multithreading
 
 def draw_boxes(frame, predictions):
     fish_detected = False
@@ -54,7 +59,12 @@ def draw_boxes(frame, predictions):
 def run_inference(frame):
     """Runs inference in a separate thread to prevent blocking the main process."""
     global result_cache
-    result_cache = CLIENT.infer(frame, model_id="fish_detection-z6be1/1")
+    try:
+        with lock:  # Prevents multiple threads from calling inference at the same time
+            result_cache = CLIENT.infer(frame, model_id="fish_detection-z6be1/1")
+    except requests.exceptions.RequestException as e:
+        print(f"Inference error: {e}")
+        result_cache = {"predictions": []}  # Prevents crashing if inference fails
 
 def generate_frames():
     """Generates video frames with real-time inference."""
@@ -63,8 +73,9 @@ def generate_frames():
         frame = picam2.capture_array()
         frame = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR_I420)  # Convert YUV to BGR for OpenCV
         
-        # Run inference asynchronously
-        threading.Thread(target=run_inference, args=(frame,)).start()
+        # Run inference asynchronously, but limit active threads
+        if threading.active_count() < 5:
+            threading.Thread(target=run_inference, args=(frame,)).start()
 
         # Use cached inference result
         frame = draw_boxes(frame, result_cache if result_cache else {"predictions": []})
