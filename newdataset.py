@@ -4,8 +4,8 @@ import os
 import subprocess
 from datetime import datetime
 
-# Ensure the Pictures directory exists
-save_dir = "/home/tipqc/Pictures/DATASET/NONFRESH"
+# Ensure the dataset directory exists
+save_dir = "/home/tipqc/Pictures/DATASET/FRESH"
 os.makedirs(save_dir, exist_ok=True)
 
 # Initialize the camera
@@ -13,9 +13,9 @@ picam2 = Picamera2()
 camera_config = picam2.create_still_configuration()
 picam2.configure(camera_config)
 
-# Enable Auto-Focus (AF) Mode
+# Set autofocus mode to "auto"
 try:
-    picam2.set_controls({"AfMode": 2})  # Set to continuous autofocus
+    picam2.set_controls({"AfMode": 1})  # 1 = Auto focus mode
 except RuntimeError as e:
     print(f"Warning: Auto-focus mode not supported: {e}")
 
@@ -23,7 +23,7 @@ except RuntimeError as e:
 picam2.start_preview()
 picam2.start()
 
-print("Press SPACEBAR to capture an HDR image, ESC to exit.")
+print("Press SPACEBAR to capture an HDR image with autofocus, ESC to exit.")
 
 while True:
     # Capture a preview frame
@@ -39,12 +39,17 @@ while True:
 
         print("Triggering autofocus...")
         try:
-            picam2.set_controls({"AfTrigger": 1})  # Trigger single autofocus
+            picam2.set_controls({"AfTrigger": 0})  # 0 = Single AF trigger
         except RuntimeError as e:
             print(f"Auto-focus trigger failed: {e}")
 
         print(f"Capturing HDR image: {filename}")
-        subprocess.run(["libcamera-still", "--hdr", "1", "--autofocus", "-o", filename])
+        subprocess.run([
+            "libcamera-still", 
+            "--hdr", "1", 
+            "--autofocus-mode", "auto",  # Use correct autofocus setting
+            "--output", filename
+        ])
 
         print(f"Image saved as {filename}")
 
