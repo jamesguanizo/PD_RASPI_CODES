@@ -46,8 +46,8 @@ while True:
         print(f"Capturing HDR image: {filename}")
         subprocess.run([
             "libcamera-still", 
-            "--hdr", "1", 
-            "--autofocus-mode", "auto",  # Use correct autofocus setting
+            "--hdr",  # HDR enabled (no value required)
+            "--autofocus-mode", "auto",  # Correct autofocus setting
             "--output", filename
         ])
 
