@@ -13,12 +13,6 @@ picam2 = Picamera2()
 camera_config = picam2.create_still_configuration()
 picam2.configure(camera_config)
 
-# Set autofocus mode to "auto"
-try:
-    picam2.set_controls({"AfMode": 1})  # 1 = Auto focus mode
-except RuntimeError as e:
-    print(f"Warning: Auto-focus mode not supported: {e}")
-
 # Start the camera
 picam2.start_preview()
 picam2.start()
@@ -37,23 +31,23 @@ while True:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(save_dir, f"captured_image_{timestamp}.jpg")
 
-        print("Triggering autofocus...")
-        try:
-            picam2.set_controls({"AfTrigger": 0})  # 0 = Single AF trigger
-        except RuntimeError as e:
-            print(f"Auto-focus trigger failed: {e}")
+        print("Stopping picamera2 to free the camera...")
+        picam2.stop()
 
         print(f"Capturing HDR image: {filename}")
-        
-        # Run libcamera-still separately, ensuring --hdr is passed correctly
-        subprocess.run([
-            "libcamera-still",
-            "--hdr",  # Ensure no value is passed here
-            "--autofocus-mode", "auto",
-            "-o", filename  # -o is required to specify output file
-        ], check=True)
+        try:
+            subprocess.run([
+                "libcamera-still",
+                "--hdr",
+                "--autofocus-mode", "auto",
+                "-o", filename
+            ], check=True)
+            print(f"Image saved as {filename}")
+        except subprocess.CalledProcessError as e:
+            print(f"Error capturing HDR image: {e}")
 
-        print(f"Image saved as {filename}")
+        print("Restarting picamera2...")
+        picam2.start()
 
     elif key == 27:  # ESC key (Exit)
         break
