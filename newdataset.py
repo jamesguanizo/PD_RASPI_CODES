@@ -44,12 +44,14 @@ while True:
             print(f"Auto-focus trigger failed: {e}")
 
         print(f"Capturing HDR image: {filename}")
+        
+        # Run libcamera-still separately, ensuring --hdr is passed correctly
         subprocess.run([
-            "libcamera-still", 
-            "--hdr",  # HDR enabled (no value required)
-            "--autofocus-mode", "auto",  # Correct autofocus setting
-            "--output", filename
-        ])
+            "libcamera-still",
+            "--hdr",  # Ensure no value is passed here
+            "--autofocus-mode", "auto",
+            "-o", filename  # -o is required to specify output file
+        ], check=True)
 
         print(f"Image saved as {filename}")
 
