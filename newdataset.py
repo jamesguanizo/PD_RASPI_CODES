@@ -1,66 +1,82 @@
 from picamera2 import Picamera2
 import cv2
 import os
+import time
 import subprocess
 from datetime import datetime
-import time
 
-save_dir = "/home/tipqc/Pictures/DATASET/FRESH"
-os.makedirs(save_dir, exist_ok=True)
+# Ensure the dataset directory exists
+SAVE_DIR = "/home/tipqc/Pictures/DATASET/FRESH"
+os.makedirs(SAVE_DIR, exist_ok=True)
 
-def initialize_camera():
-    picam2 = Picamera2()
-    config = picam2.create_preview_configuration()
-    picam2.configure(config)
-    picam2.start()
-    return picam2
+# Initialize Camera
+picam2 = Picamera2()
+video_config = picam2.create_video_configuration(
+    main={"size": (1920, 1080), "format": "RGB888"},
+    controls={"FrameRate": 50}
+)
+picam2.configure(video_config)
+picam2.start()
 
-def capture_hdr_image(filename):
+def generate_frames():
+    """ Continuously capture frames for preview. """
+    while True:
+        frame = picam2.capture_array()
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        _, buffer = cv2.imencode('.jpg', frame)
+        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+
+def capture_hdr():
+    """ Stops the camera, captures an HDR image using libcamera-still, and restarts the camera. """
     try:
+        print("Stopping camera before HDR capture...")
+        picam2.stop()
+        time.sleep(1)  # Allow time to fully release the camera
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = os.path.join(SAVE_DIR, f"captured_image_{timestamp}.jpg")
+
+        print(f"Capturing HDR image: {filename}")
         subprocess.run([
             "libcamera-still",
             "--hdr",
             "--autofocus-mode", "auto",
             "-o", filename
         ], check=True)
-        return True
+
+        print(f"Image saved as {filename}")
+
     except subprocess.CalledProcessError as e:
         print(f"Error capturing HDR image: {e}")
-        return False
 
-picam2 = initialize_camera()
-print("Press SPACEBAR to capture, ESC to exit")
+    finally:
+        print("Restarting camera...")
+        time.sleep(1)  # Small delay before reinitializing
+        picam2.configure(video_config)
+        picam2.start()
+        print("Camera restarted successfully.")
 
-try:
-    while True:
-        frame = picam2.capture_array()
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        cv2.imshow("Preview", frame)
+# Flask App
+from flask import Flask, Response, render_template, jsonify
 
-        key = cv2.waitKey(1) & 0xFF
+app = Flask(__name__)
 
-        if key == 32:  # Spacebar
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(save_dir, f"captured_image_{timestamp}.jpg")
-            
-            # Clean up picamera2 resources
-            picam2.stop()
-            picam2.close()
-            
-            # Ensure camera release
-            time.sleep(1)
-            
-            # Capture with libcamera-still
-            if capture_hdr_image(filename):
-                print(f"Captured: {filename}")
-            
-            # Reinitialize camera
-            picam2 = initialize_camera()
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-        elif key == 27:  # ESC
-            break
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-finally:
-    cv2.destroyAllWindows()
-    picam2.stop()
-    picam2.close()
+@app.route('/capture_hdr', methods=['POST'])
+def capture_hdr_api():
+    """ API endpoint to trigger HDR capture. """
+    try:
+        capture_hdr()
+        return jsonify({"message": "HDR Image Captured Successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, threaded=True)
