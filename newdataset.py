@@ -32,9 +32,9 @@ while True:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(save_dir, f"captured_image_{timestamp}.jpg")
 
-        print("Stopping picamera2 to free the camera...")
+        print("Pausing picamera2 to free the camera...")
         picam2.stop()
-        time.sleep(1)  # Allow the camera to fully release
+        time.sleep(2)  # Allow full camera release before HDR capture
 
         print(f"Capturing HDR image: {filename}")
         try:
@@ -48,8 +48,9 @@ while True:
         except subprocess.CalledProcessError as e:
             print(f"Error capturing HDR image: {e}")
 
-        print("Restarting picamera2...")
-        time.sleep(1)  # Small delay before reinitializing
+        print("Restarting picamera2 safely...")
+        time.sleep(2)  # Ensure camera is fully available before restarting
+        picam2 = Picamera2()  # Reinitialize Picamera2 to avoid issues
         picam2.configure(camera_config)
         picam2.start()
 
