@@ -1,0 +1,65 @@
+import spidev
+import time
+import math
+
+# Initialize SPI
+spi = spidev.SpiDev()
+spi.open(0, 0)  # Open SPI bus 0, device 0
+spi.max_speed_hz = 1350000
+
+# ADC reading function
+def read_adc(channel):
+    if channel < 0 or channel > 7:
+        raise ValueError("ADC channel must be between 0 and 7.")
+    command = [1, (8 + channel) << 4, 0]
+    response = spi.xfer2(command)
+    return ((response[1] & 3) << 8) + response[2]
+
+# Convert ADC value to voltage
+def calculate_voltage(adc_value, v_ref=5):
+    return (adc_value / 1023.0) * v_ref
+
+# PPM calculation function
+def calculate_ppm(voltage, R0, RL, A, B, Vcircuit=5):
+    if voltage <= 0:
+        return 0  # Avoid division by zero
+    Rs = ((Vcircuit - voltage) / voltage) * RL  # Compute Rs
+    Rs_R0_ratio = Rs / R0  # Normalize Rs to R0
+    return max(0, A * (Rs_R0_ratio ** B))  # Apply calibration equation
+
+def main():
+    try:
+        # Calibration values for MQ136 (H2S sensor) and MQ137 (NH3 sensor)
+        R0_MQ136 = 30  # Calibrate this
+        RL_MQ136 = 20
+        A_MQ136 = 116.6020682
+        B_MQ136 = -2.769034857
+
+        R0_MQ137 = 30  # Calibrate this
+        RL_MQ137 = 20
+        A_MQ137 = 100  # Adjust as per calibration
+        B_MQ137 = -1.5  # Adjust as per calibration
+
+        while True:
+            # Read and calculate for MQ136 (Channel 6)
+            adc_value_mq136 = read_adc(1)
+            voltage_mq136 = calculate_voltage(adc_value_mq136)
+            ppm_mq136 = calculate_ppm(voltage_mq136, R0_MQ136, RL_MQ136, A_MQ136, B_MQ136)
+            
+            # Read and calculate for MQ137 (Channel 1)
+            adc_value_mq137 = read_adc(6)
+            voltage_mq137 = calculate_voltage(adc_value_mq137)
+            ppm_mq137 = calculate_ppm(voltage_mq137, R0_MQ137, RL_MQ137, A_MQ137, B_MQ137)
+            
+            print(f"MQ136 - ADC: {adc_value_mq136}, Voltage: {voltage_mq136:.2f} V, PPM: {ppm_mq136:.2f}")
+            print(f"MQ137 - ADC: {adc_value_mq137}, Voltage: {voltage_mq137:.2f} V, PPM: {ppm_mq137:.2f}")
+            print("------------------------------------------------")
+            
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("Exiting program.")
+    finally:
+        spi.close()
+
+if __name__ == "__main__":
+    main()
